@@ -1,0 +1,12 @@
+"""Local development settings."""
+from .base import *  # noqa: F401,F403
+from .base import env
+
+DEBUG = env.bool("DJANGO_DEBUG", default=True)
+LOGGING["handlers"]["stdout"]["formatter"] = env("LOG_FORMAT", default="console")  # noqa: F405
+
+# Browsable API is handy locally; production serves JSON only.
+REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (  # noqa: F405
+    "rest_framework.renderers.JSONRenderer",
+    "rest_framework.renderers.BrowsableAPIRenderer",
+)

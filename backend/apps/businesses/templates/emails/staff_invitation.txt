@@ -1,0 +1,13 @@
+{% autoescape off %}Hello,
+
+{{ inviter_name }} has invited you to join {{ business_name }} on myEcatalogues as {{ role_name }}.
+
+Accept the invitation:
+{{ accept_url }}
+
+Sign in (or create an account) with this email address to accept. The link expires on {{ expires_at|date:"j M Y, H:i" }} UTC.
+
+If you weren't expecting this invitation, you can ignore this email.
+
+— The myEcatalogues team
+{% endautoescape %}
