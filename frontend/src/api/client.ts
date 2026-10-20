@@ -33,6 +33,8 @@ function isApiErrorBody(data: unknown): data is ApiErrorBody {
 }
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+/** For plain URLs (e.g. <img src>) that bypass axios. */
+export const API_BASE_URL = baseURL
 
 export const api = axios.create({
   baseURL,

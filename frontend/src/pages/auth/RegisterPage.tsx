@@ -1,4 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ArrowRight, Lock, Mail, Smartphone, UserRound } from 'lucide-react'
+import { Stepper } from '@/components/ui/Stepper'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
@@ -54,23 +56,15 @@ export function RegisterPage() {
 
   return (
     <>
-      <AuthHeading
-        title="Create your account"
-        subtitle={
-          <>
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-brand-700 hover:underline">
-              Sign in
-            </Link>
-          </>
-        }
-      />
+      <Stepper current={0} />
+      <AuthHeading title="Create Your Account" subtitle="Enter your basic details to get started" />
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         {formError && <Alert tone="error">{formError}</Alert>}
-        <TextField label="Full name" autoComplete="name" required error={errors.full_name?.message} {...register('full_name')} />
-        <TextField label="Email" type="email" autoComplete="email" required error={errors.email?.message} {...register('email')} />
+        <TextField label="Full Name" icon={UserRound} placeholder="Enter your full name" autoComplete="name" required error={errors.full_name?.message} {...register('full_name')} />
+        <TextField label="Email Address" icon={Mail} placeholder="you@example.com" type="email" autoComplete="email" required error={errors.email?.message} {...register('email')} />
         <TextField
-          label="Mobile number"
+          label="Mobile Number"
+          icon={Smartphone}
           type="tel"
           autoComplete="tel"
           placeholder="+91 98765 43210"
@@ -80,15 +74,18 @@ export function RegisterPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             label="Password"
+            icon={Lock}
             type="password"
             autoComplete="new-password"
+            placeholder="Create password"
             required
             hint="At least 8 characters, not only numbers."
             error={errors.password?.message}
             {...register('password')}
           />
           <TextField
-            label="Confirm password"
+            label="Confirm Password"
+            icon={Lock}
             type="password"
             autoComplete="new-password"
             required
@@ -109,11 +106,15 @@ export function RegisterPage() {
           error={errors.accept_terms?.message}
           {...register('accept_terms')}
         />
-        <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>
-          Create account
+        <Button type="submit" size="lg" className="h-[52px] w-full text-[17px]" loading={isSubmitting}>
+          Continue <ArrowRight className="size-5" aria-hidden />
         </Button>
-        <p className="text-center text-xs text-muted">
-          Next you'll add your business details, then choose a plan.
+        <p className="text-center text-xs text-body">
+          Next you'll verify your email, add your business details, then choose a plan.
+        </p>
+        <p className="text-center text-[14px] text-ink">
+          Already have an account?{' '}
+          <Link to="/login" className="font-medium text-brand-700 underline underline-offset-2">Login</Link>
         </p>
       </form>
     </>

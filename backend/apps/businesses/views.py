@@ -1,3 +1,4 @@
+from django.db import transaction
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
@@ -5,6 +6,8 @@ from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from apps.audit_logs import services as audit
 
 from . import services
 from .context import BUSINESS_HEADER, resolve_business_context
@@ -14,6 +17,7 @@ from .serializers import (
     AcceptInvitationSerializer,
     BusinessContextSerializer,
     BusinessSerializer,
+    BusinessSettingsSerializer,
     InvitationSerializer,
     MembershipSerializer,
     MyBusinessSerializer,
@@ -72,7 +76,12 @@ class BusinessDetailView(APIView):
         ctx = self._context(request, business_id, "business.update")
         serializer = BusinessSerializer(ctx.business, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        fields = list(serializer.validated_data)
+        before = audit.snapshot(ctx.business, fields)
+        with transaction.atomic():
+            serializer.save()
+            if changes := audit.diff(before, audit.snapshot(ctx.business, fields)):
+                audit.record_ctx(ctx, "business.updated", target=ctx.business, changes=changes)
         return Response(serializer.data)
 
 
@@ -85,6 +94,35 @@ class BusinessContextView(BusinessScopedViewMixin, APIView):
     @extend_schema(responses=BusinessContextSerializer)
     def get(self, request):
         return Response(BusinessContextSerializer(request.business_context).data)
+
+
+SETTINGS_AUDIT_FIELDS = [
+    "logo", "brand_color", "default_show_prices", "default_enquiries_enabled", "default_whatsapp_number",
+    "enquiry_email_enabled",
+]
+
+
+@extend_schema(parameters=[BUSINESS_HEADER_PARAM])
+class BusinessSettingsView(BusinessScopedViewMixin, APIView):
+    """Branding and catalogue defaults for the active business."""
+
+    required_permissions = {"get": "business.view", "patch": "settings.update"}
+
+    @extend_schema(responses=BusinessSettingsSerializer)
+    def get(self, request):
+        return Response(BusinessSettingsSerializer(request.business).data)
+
+    @extend_schema(request=BusinessSettingsSerializer, responses=BusinessSettingsSerializer)
+    def patch(self, request):
+        business = request.business
+        serializer = BusinessSettingsSerializer(business, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        before = audit.snapshot(business, SETTINGS_AUDIT_FIELDS)
+        with transaction.atomic():
+            serializer.save()
+            if changes := audit.diff(before, audit.snapshot(business, SETTINGS_AUDIT_FIELDS)):
+                audit.record_ctx(request.business_context, "business.settings_updated", target=business, changes=changes)
+        return Response(BusinessSettingsSerializer(business).data)
 
 
 @extend_schema(parameters=[BUSINESS_HEADER_PARAM])
@@ -162,7 +200,7 @@ class InvitationViewSet(
         )
 
     def perform_destroy(self, instance):
-        services.revoke_invitation(instance)
+        services.revoke_invitation(instance, ctx=self.request.business_context)
 
 
 class AcceptInvitationView(APIView):

@@ -8,9 +8,12 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from apps.audit_logs import services as audit
+from apps.audit_logs.models import AuditScope
 from apps.core.exceptions import BusinessRuleViolation
 
 from . import services
+from .models import User
 from .serializers import (
     ChangePasswordSerializer,
     DetailSerializer,
@@ -54,7 +57,14 @@ class LoginView(AuthThrottleMixin, TokenObtainPairView):
 
     @extend_schema(responses=TokenPairResponseSerializer)
     def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == status.HTTP_200_OK:
+            # Security trail for platform admins only (no IP address, no password, no token).
+            user = User.objects.filter(email__iexact=str(request.data.get("email", "")).strip()).first()
+            if user is not None:
+                audit.record("auth.login", actor=user, scope=AuditScope.ACCOUNT, target=user,
+                             target_label=user.full_name or user.email)
+        return response
 
 
 class RefreshView(AuthThrottleMixin, TokenRefreshView):

@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, type LucideIcon } from 'lucide-react'
 import {
   forwardRef,
   useId,
@@ -11,11 +11,11 @@ import {
 import { cn } from '@/utils/cn'
 
 const controlBase =
-  'block w-full rounded-lg border bg-white px-3 text-sm text-ink placeholder:text-slate-400 shadow-sm transition-colors ' +
+  'block w-full rounded-lg border bg-white px-3 text-sm text-ink placeholder:text-[#8d98b8] transition-colors ' +
   'focus:border-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-600/20 disabled:bg-canvas disabled:text-muted'
 
 function controlClasses(invalid: boolean, extra?: string) {
-  return cn(controlBase, invalid ? 'border-red-400' : 'border-border', extra)
+  return cn(controlBase, invalid ? 'border-red-400' : 'border-[#d5e5fa]', extra)
 }
 
 interface FieldShellProps {
@@ -28,10 +28,10 @@ interface FieldShellProps {
   className?: string
 }
 
-function FieldShell({ id, label, error, hint, required, children, className }: FieldShellProps) {
+function FieldShell({ id, label, error, hint, required, children, className, hideLabel }: FieldShellProps & { hideLabel?: boolean }) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      <label htmlFor={id} className="block text-sm font-medium text-ink">
+      <label htmlFor={id} className={cn('block text-sm font-medium text-ink', hideLabel && 'sr-only')}>
         {label}
         {required && <span className="ml-0.5 text-red-600" aria-hidden>*</span>}
       </label>
@@ -54,22 +54,26 @@ interface CommonProps {
   containerClassName?: string
 }
 
-export const TextField = forwardRef<HTMLInputElement, CommonProps & InputHTMLAttributes<HTMLInputElement>>(
-  function TextField({ label, error, hint, containerClassName, className, id, required, type, ...props }, ref) {
+export const TextField = forwardRef<
+  HTMLInputElement,
+  CommonProps & InputHTMLAttributes<HTMLInputElement> & { icon?: LucideIcon; hideLabel?: boolean }
+>(
+  function TextField({ label, error, hint, containerClassName, className, id, required, type, icon: Icon, hideLabel, ...props }, ref) {
     const autoId = useId()
     const fieldId = id ?? autoId
     const [reveal, setReveal] = useState(false)
     const isPassword = type === 'password'
     return (
-      <FieldShell id={fieldId} label={label} error={error} hint={hint} required={required} className={containerClassName}>
+      <FieldShell id={fieldId} label={label} error={error} hint={hint} required={required} className={containerClassName} hideLabel={hideLabel}>
         <div className="relative">
+          {Icon && <Icon className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-ink/70" aria-hidden />}
           <input
             ref={ref}
             id={fieldId}
             type={isPassword && reveal ? 'text' : type}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined}
-            className={controlClasses(Boolean(error), cn('h-10', isPassword && 'pr-10', className))}
+            className={controlClasses(Boolean(error), cn('h-10', Icon && 'pl-11', isPassword && 'pr-10', className))}
             {...props}
           />
           {isPassword && (

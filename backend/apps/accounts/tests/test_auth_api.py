@@ -140,7 +140,10 @@ def test_me_returns_profile_without_secrets(client_for, make_user):
     user = make_user(email="me@example.com", full_name="Me Myself")
     body = client_for(user).get(ME).json()
     assert body["email"] == "me@example.com" and body["full_name"] == "Me Myself"
-    assert set(body) == {"id", "email", "full_name", "phone", "is_email_verified", "platform_role", "date_joined"}
+    assert set(body) == {
+        "id", "email", "full_name", "phone", "is_email_verified", "platform_role", "platform_permissions", "date_joined",
+    }
+    assert body["platform_permissions"] == []
 
 
 def test_me_update_cannot_escalate_or_change_email(client_for, make_user):

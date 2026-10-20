@@ -32,7 +32,8 @@ export function CreateBusinessPage() {
             onSubmit={async (values) => {
               const business = await create.mutateAsync(values)
               select(business.id)
-              navigate('/app', { replace: true })
+              // Step 3 of onboarding: choose a plan (paid features unlock after verified payment).
+              navigate('/app/billing/plans', { replace: true })
               return business
             }}
           />

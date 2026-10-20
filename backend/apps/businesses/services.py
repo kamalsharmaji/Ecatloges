@@ -13,7 +13,10 @@ from django.utils import timezone
 from django.utils.text import slugify
 from rest_framework import exceptions
 
+from apps.audit_logs import services as audit
+from apps.billing import entitlements
 from apps.core.exceptions import BusinessRuleViolation
+from apps.notifications.services import notify, notify_members
 from apps.rbac.models import Role
 from apps.rbac.registry import ADMIN, OWNER
 
@@ -63,6 +66,7 @@ def create_business(*, user, **fields) -> Business:
             if attempt == 2:
                 raise
     BusinessMembership.objects.create(business=business, user=user, role=system_role(OWNER))
+    audit.record("business.created", business=business, actor=user, target=business)
     logger.info("Business created", extra={"business_id": str(business.id), "user_id": str(user.id)})
     return business
 
@@ -118,12 +122,35 @@ def update_membership(ctx: BusinessContext, target: BusinessMembership, *, role=
     )
     if losing_ownership:
         _assert_not_last_owner(target)
+    old_role, old_status = target.role, target.status
     if role is not None and role.pk != target.role_id:
         assert_can_assign_role(ctx, role)
         target.role = role
+    if status == BusinessMembership.Status.ACTIVE and not target.is_active:
+        # Restoring a suspended member takes a seat again.
+        entitlements.assert_within_limit(ctx.business, "max_staff")
     if status is not None:
         target.status = status
     target.save()
+    changes = {}
+    if target.role_id != old_role.pk:
+        changes["role"] = {"from": old_role.name, "to": target.role.name}
+    if target.status != old_status:
+        changes["membership_status"] = {"from": old_status, "to": target.status}
+    if changes:
+        action = "member.role_changed" if "role" in changes else f"member.{'suspended' if target.status == BusinessMembership.Status.SUSPENDED else 'reactivated'}"
+        audit.record_ctx(ctx, action, target=target, target_label=_member_label(target), changes=changes)
+        if "role" in changes and target.is_active:
+            notify(
+                [target.user],
+                business=ctx.business,
+                event="team.role_changed",
+                category="team",
+                title="Your role was changed",
+                body=f"You are now {target.role.name} in {ctx.business.name}.",
+                link="/app",
+                target=target,
+            )
     logger.info(
         "Membership updated",
         extra={"membership_id": str(target.id), "actor_id": str(ctx.membership.user_id), "role": target.role.name,
@@ -137,6 +164,8 @@ def remove_membership(ctx: BusinessContext, target: BusinessMembership) -> None:
     target = BusinessMembership.objects.select_for_update().select_related("role", "business").get(pk=target.pk)
     _assert_can_manage(ctx, target)
     _assert_not_last_owner(target)
+    audit.record_ctx(ctx, "member.removed", target=target, target_label=_member_label(target),
+                     metadata={"role": target.role.name})
     logger.info("Membership removed", extra={"membership_id": str(target.id), "actor_id": str(ctx.membership.user_id)})
     target.delete()
 
@@ -147,6 +176,7 @@ def leave_business(ctx: BusinessContext) -> None:
         pk=ctx.membership.pk
     )
     _assert_not_last_owner(membership)
+    audit.record_ctx(ctx, "member.left", target=membership, target_label=_member_label(membership))
     membership.delete()
 
 
@@ -165,6 +195,12 @@ def transfer_ownership(ctx: BusinessContext, target: BusinessMembership) -> Busi
     target.save(update_fields=["role", "updated_at"])
     actor.role = system_role(ADMIN)
     actor.save(update_fields=["role", "updated_at"])
+    audit.record_ctx(ctx, "business.ownership_transferred", target=target, target_label=_member_label(target))
+    notify(
+        [target.user], business=ctx.business, event="team.ownership_transferred", category="team",
+        title="You are now an owner", body=f"Ownership of {ctx.business.name} was transferred to you.", link="/app",
+        target=target,
+    )
     logger.info("Ownership transferred", extra={"business_id": str(ctx.business.id), "to_membership": str(target.id)})
     return target
 
@@ -176,6 +212,8 @@ def transfer_ownership(ctx: BusinessContext, target: BusinessMembership) -> Busi
 def invite_member(ctx: BusinessContext, *, email: str, role: Role) -> StaffInvitation:
     email = email.strip().lower()
     assert_can_assign_role(ctx, role)
+    # A pending invitation reserves a team seat on the current plan.
+    entitlements.assert_within_limit(ctx.business, "max_staff")
     if BusinessMembership.objects.filter(business=ctx.business, user__email__iexact=email).exists():
         raise _rule("This person is already a member of the business.", "already_member")
     if StaffInvitation.objects.filter(
@@ -197,14 +235,31 @@ def invite_member(ctx: BusinessContext, *, email: str, role: Role) -> StaffInvit
         expires_at=timezone.now() + INVITATION_TTL,
     )
     transaction.on_commit(lambda: send_invitation_email(invitation, token))
+    audit.record_ctx(ctx, "member.invited", target=invitation, target_label=f"Invitation ({role.name})",
+                     metadata={"role": role.name})
+    # People who already have an account also get an in-app heads-up (the email stays the way to accept).
+    from apps.accounts.models import User
+
+    invitee = User.objects.filter(email__iexact=email, is_active=True).first()
+    if invitee is not None:
+        notify(
+            [invitee], event="team.invited", category="team",
+            title=f"Invitation to join {ctx.business.name}",
+            body=f"You were invited as {role.name}. Use the link in your email to accept.",
+            link="/businesses", target=invitation, dedup_key=f"invitation:{invitation.pk}",
+        )
     return invitation
 
 
-def revoke_invitation(invitation: StaffInvitation) -> None:
+@transaction.atomic
+def revoke_invitation(invitation: StaffInvitation, *, ctx: BusinessContext | None = None) -> None:
     if invitation.status != StaffInvitation.Status.PENDING:
         raise _rule("Only pending invitations can be revoked.", "invitation_not_pending")
     invitation.status = StaffInvitation.Status.REVOKED
     invitation.save(update_fields=["status", "updated_at"])
+    if ctx is not None:
+        audit.record_ctx(ctx, "member.invitation_revoked", target=invitation,
+                         target_label=f"Invitation ({invitation.role.name})")
 
 
 @transaction.atomic
@@ -225,6 +280,8 @@ def accept_invitation(*, user, token: str) -> BusinessMembership:
         raise exceptions.NotFound("This invitation is invalid or has already been used.")
     if BusinessMembership.objects.filter(business=invitation.business, user=user).exists():
         raise _rule("You are already a member of this business.", "already_member")
+    # The seat was reserved when inviting; the business still needs a paid plan to add people.
+    entitlements.require_paid_access(invitation.business)
 
     membership = BusinessMembership.objects.create(
         business=invitation.business, user=user, role=invitation.role, invited_by=invitation.invited_by
@@ -236,4 +293,17 @@ def accept_invitation(*, user, token: str) -> BusinessMembership:
     # Possession of the emailed token proves control of the address.
     if not user.is_email_verified:
         user.mark_email_verified()
+    audit.record("member.joined", business=invitation.business, actor=user, target=membership,
+                 target_label=_member_label(membership), metadata={"role": invitation.role.name})
+    notify_members(
+        invitation.business, "member.view", exclude=user,
+        event="team.member_joined", category="team",
+        title="New team member added",
+        body=f"{user.full_name or user.email} has joined as {invitation.role.name}.",
+        link="/app/team", target=membership, dedup_key=f"membership:{membership.pk}:joined",
+    )
     return membership
+
+
+def _member_label(membership: BusinessMembership) -> str:
+    return membership.user.full_name or membership.user.email

@@ -17,6 +17,7 @@ export interface User {
   phone: string
   is_email_verified: boolean
   platform_role: PlatformRole
+  platform_permissions: string[]
   date_joined: string
 }
 
@@ -83,12 +84,18 @@ export interface Business {
   country: string
   website: string
   description: string
+  social_links: SocialLinks
   status: ActiveStatus
   created_at: string
   updated_at: string
 }
 
-export type BusinessInput = Omit<Business, 'id' | 'slug' | 'status' | 'created_at' | 'updated_at'>
+export type BusinessInput = Omit<Business, 'id' | 'slug' | 'status' | 'created_at' | 'updated_at' | 'social_links'> & {
+  social_links?: SocialLinks
+}
+
+export type SocialNetwork = 'facebook' | 'instagram' | 'youtube' | 'linkedin' | 'x'
+export type SocialLinks = Partial<Record<SocialNetwork, string>>
 
 export interface MyBusiness {
   membership_id: string

@@ -15,6 +15,7 @@ urlpatterns = [
     path("businesses/<uuid:business_id>/", views.BusinessDetailView.as_view(), name="business-detail"),
     path("business-context/", views.BusinessContextView.as_view(), name="business-context"),
     path("business-context/leave/", views.LeaveBusinessView.as_view(), name="business-leave"),
+    path("business-settings/", views.BusinessSettingsView.as_view(), name="business-settings"),
     path("invitations/accept/", views.AcceptInvitationView.as_view(), name="invitation-accept"),
     path("permissions/", PermissionListView.as_view(), name="permission-list"),
     *router.urls,

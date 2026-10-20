@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useMyBusinesses } from '@/api/businesses'
 import { buttonClasses } from '@/components/ui/buttonStyles'
 import { Badge, ErrorState, Spinner } from '@/components/ui/Feedback'
+import { useAuth } from '@/features/auth/AuthContext'
 import { useActiveBusiness } from '@/features/business/BusinessContext'
 import { categoryLabel } from '@/features/business/constants'
 import type { MyBusiness } from '@/types/api'
@@ -14,13 +15,15 @@ function isUsable(m: MyBusiness) {
 export function SelectBusinessPage() {
   const { data, isPending, error, refetch } = useMyBusinesses()
   const { select, businessId } = useActiveBusiness()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   if (isPending) return <Spinner />
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />
 
   const memberships = data.results
-  if (memberships.length === 0) return <Navigate to="/onboarding" replace />
+  // Platform staff usually have no business of their own; send them to the admin panel instead.
+  if (memberships.length === 0) return <Navigate to={user?.platform_permissions.length ? '/admin' : '/onboarding'} replace />
 
   const open = (m: MyBusiness) => {
     select(m.business.id)

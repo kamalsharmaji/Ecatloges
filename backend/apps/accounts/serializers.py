@@ -3,16 +3,31 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import User
+from .platform import platform_permissions
 
 
 class UserSerializer(serializers.ModelSerializer):
     """The caller's own profile. Never exposes password hashes or tokens."""
 
+    platform_permissions = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "phone", "is_email_verified", "platform_role", "date_joined"]
+        fields = [
+            "id",
+            "email",
+            "full_name",
+            "phone",
+            "is_email_verified",
+            "platform_role",
+            "platform_permissions",
+            "date_joined",
+        ]
         # Email changes need re-verification (later phase); platform_role is set by platform admins only.
         read_only_fields = ["id", "email", "is_email_verified", "platform_role", "date_joined"]
+
+    def get_platform_permissions(self, obj) -> list[str]:
+        return sorted(platform_permissions(obj))
 
     def validate_full_name(self, value):
         value = value.strip()

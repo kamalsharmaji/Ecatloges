@@ -11,5 +11,7 @@ argon2-cffi>=25.1,<26
 psycopg[binary]>=3.2.10,<3.3
 Pillow>=11.3,<12
 qrcode>=8.2,<9
+# Invoice PDF rendering (pure Python).
+reportlab>=4.4,<5
 # Production WSGI server (Linux only; not used on Windows dev machines).
 gunicorn>=23,<24

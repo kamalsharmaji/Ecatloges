@@ -68,8 +68,9 @@ PERMISSIONS: list[PermissionDef] = [
     PermissionDef("analytics.export", "Export analytics"),
     # Billing & settings
     PermissionDef("subscription.view", "View subscription"),
-    PermissionDef("subscription.manage", "Change or cancel subscription", assignable=False),
-    PermissionDef("invoice.view", "View invoices"),
+    PermissionDef("subscription.manage", "Buy, change or cancel the subscription", assignable=False),
+    PermissionDef("payment.view", "View payment history"),
+    PermissionDef("invoice.view", "View and download invoices"),
     PermissionDef("settings.update", "Update business settings"),
     PermissionDef("support.view", "View support tickets"),
     PermissionDef("support.create", "Create support tickets"),

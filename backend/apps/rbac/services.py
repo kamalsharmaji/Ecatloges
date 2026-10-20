@@ -1,6 +1,7 @@
 from django.db import IntegrityError, transaction
 from rest_framework import exceptions
 
+from apps.audit_logs import services as audit
 from apps.core.exceptions import BusinessRuleViolation
 
 from .models import Permission, Role, RolePermission
@@ -37,6 +38,7 @@ def create_role(ctx, *, name: str, description: str = "", permissions: list[str]
     except IntegrityError:
         raise exceptions.ValidationError({"name": ["A role with this name already exists."]}) from None
     _set_permissions(role, perms)
+    audit.record_ctx(ctx, "role.created", target=role, metadata={"permissions": sorted(p.code for p in perms)})
     return role
 
 
@@ -49,6 +51,10 @@ def update_role(ctx, role: Role, *, name=None, description=None, permissions=Non
         raise exceptions.PermissionDenied("You cannot edit a role that grants permissions you do not hold.")
     if ctx.membership.role_id == role.pk:
         raise exceptions.PermissionDenied("You cannot edit the role assigned to you.")
+    before_codes = role.permission_codes()
+    changes = {}
+    if name is not None and name.strip() != role.name:
+        changes["name"] = {"from": role.name, "to": name.strip()}
     if name is not None:
         role.name = name.strip()
     if description is not None:
@@ -60,6 +66,12 @@ def update_role(ctx, role: Role, *, name=None, description=None, permissions=Non
         raise exceptions.ValidationError({"name": ["A role with this name already exists."]}) from None
     if permissions is not None:
         _set_permissions(role, _validated_permissions(ctx, permissions))
+        after_codes = set(permissions)
+        if after_codes != before_codes:
+            changes["permissions_added"] = {"from": None, "to": sorted(after_codes - before_codes)}
+            changes["permissions_removed"] = {"from": None, "to": sorted(before_codes - after_codes)}
+    if changes:
+        audit.record_ctx(ctx, "role.updated", target=role, changes=changes)
     return role
 
 
@@ -70,4 +82,5 @@ def delete_role(ctx, role: Role) -> None:
         raise BusinessRuleViolation("Reassign members using this role before deleting it.", code="role_in_use")
     if not role.permission_codes() <= ctx.permissions:
         raise exceptions.PermissionDenied("You cannot delete a role that grants permissions you do not hold.")
+    audit.record_ctx(ctx, "role.deleted", target=role)
     role.delete()

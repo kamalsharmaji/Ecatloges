@@ -40,17 +40,18 @@ export function Alert({
   )
 }
 
+// Pastel status chips from the reference (no outline): Active green, Pending amber, Inactive red, Plan blue.
 const badgeTones = {
-  neutral: 'bg-slate-100 text-slate-700',
-  brand: 'bg-brand-50 text-brand-800 ring-1 ring-brand-200',
-  success: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
-  warning: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200',
-  danger: 'bg-red-50 text-red-700 ring-1 ring-red-200',
+  neutral: 'bg-[#eceff5] text-[#55607f]',
+  brand: 'bg-[#e0ebff] text-[#1f5fe0]',
+  success: 'bg-[#dcf7e5] text-[#14a04a]',
+  warning: 'bg-[#fff1d6] text-[#d97706]',
+  danger: 'bg-[#ffe1e8] text-[#e11d48]',
 }
 
 export function Badge({ tone = 'neutral', children }: { tone?: keyof typeof badgeTones; children: ReactNode }) {
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', badgeTones[tone])}>
+    <span className={cn('inline-flex items-center rounded-md px-2.5 py-1 text-xs font-medium', badgeTones[tone])}>
       {children}
     </span>
   )
@@ -85,12 +86,12 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-white px-6 py-12 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-brand-50 text-brand-700">
-        <Icon className="size-6" aria-hidden />
+    <div className="flex flex-col items-center rounded-2xl bg-white px-6 py-12 text-center shadow-panel">
+      <span className="flex size-14 items-center justify-center rounded-2xl bg-[#d5e9fd] text-[#085afc]">
+        <Icon className="size-7" fill="currentColor" fillOpacity={0.16} aria-hidden />
       </span>
-      <h3 className="mt-4 text-base font-semibold">{title}</h3>
-      {description && <p className="mt-1 max-w-sm text-sm text-muted">{description}</p>}
+      <h3 className="mt-4 text-base font-semibold text-ink">{title}</h3>
+      {description && <p className="mt-1 max-w-sm text-sm text-body">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
   )

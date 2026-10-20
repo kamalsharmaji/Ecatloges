@@ -71,8 +71,10 @@ export function useLeaveBusiness() {
 // --- Members --------------------------------------------------------------------------------
 export interface MemberParams {
   page?: number
+  page_size?: number
   search?: string
   status?: string
+  role?: string
 }
 
 export function useMembers(businessId: string | null, params: MemberParams) {

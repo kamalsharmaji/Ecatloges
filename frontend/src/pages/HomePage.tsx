@@ -1,71 +1,39 @@
-import { CircleAlert, CircleCheck, LoaderCircle } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { useHealthCheck } from '@/api/system'
-import { Logo } from '@/components/Logo'
-import { buttonClasses } from '@/components/ui/buttonStyles'
+import { useEffect } from 'react'
 import { useAuth } from '@/features/auth/AuthContext'
+import { PRICING, showBlock, STATS, TESTIMONIALS } from '@/features/landing/content'
+import { Faq, FinalCta, Industries, LandingFooter, Pricing, StatsBar, Testimonials } from '@/features/landing/LandingBottom'
+import { CategoryStrip, DeviceShowcase, Features, Hero, HowItWorks, LandingHeader } from '@/features/landing/LandingTop'
 
-/** Minimal landing page. Replaced by the full marketing site in Phase 9. */
+/** Marketing landing page (sections in the order of the approved UI reference). */
 export function HomePage() {
   const { status } = useAuth()
-  const health = useHealthCheck()
+  const signedIn = status === 'authenticated'
+  // Signed-in visitors go straight to their businesses; everyone else signs up first.
+  const ctaHref = signedIn ? '/businesses' : '/register'
+  const planHref = signedIn ? '/businesses' : '/register'
+
+  useEffect(() => {
+    document.title = 'myEcatalogues — Showcase Your Products. Grow Your Business.'
+  }, [])
 
   return (
-    <div className="min-h-screen">
-      <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Logo />
-        <nav className="flex items-center gap-2">
-          {status === 'authenticated' ? (
-            <Link to="/businesses" className={buttonClasses('primary', 'md')}>
-              Go to dashboard
-            </Link>
-          ) : (
-            <>
-              <Link to="/login" className={buttonClasses('ghost', 'md')}>
-                Sign in
-              </Link>
-              <Link to="/register" className={buttonClasses('primary', 'md')}>
-                Get started
-              </Link>
-            </>
-          )}
-        </nav>
-      </header>
-
-      <main className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-          Digital catalogues that <span className="text-brand-700">sell</span>.
-        </h1>
-        <p className="mt-4 max-w-xl text-lg text-muted">
-          Create beautiful product catalogues, share them with a link or QR code, and turn views into enquiries.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link to="/register" className={buttonClasses('primary', 'lg')}>
-            Create your free account
-          </Link>
-          <Link to="/login" className={buttonClasses('secondary', 'lg')}>
-            Sign in
-          </Link>
-        </div>
-
-        <p aria-live="polite" className="mt-16 flex items-center gap-2 text-xs text-muted">
-          {health.isPending && (
-            <>
-              <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> Checking service status…
-            </>
-          )}
-          {health.isError && (
-            <>
-              <CircleAlert className="size-3.5 text-red-600" aria-hidden /> Service unavailable: {health.error.message}
-            </>
-          )}
-          {health.isSuccess && (
-            <>
-              <CircleCheck className="size-3.5 text-emerald-600" aria-hidden /> All systems operational
-            </>
-          )}
-        </p>
+    <div id="top" className="min-h-screen overflow-x-clip bg-white font-sans text-lp-ink">
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2">Skip to content</a>
+      <LandingHeader signedIn={signedIn} />
+      <main id="main">
+        <Hero ctaHref={ctaHref} />
+        <CategoryStrip />
+        <Features />
+        <HowItWorks />
+        <DeviceShowcase />
+        {showBlock(STATS) && <StatsBar />}
+        <Industries />
+        {showBlock(PRICING) && <Pricing planHref={planHref} />}
+        {showBlock(TESTIMONIALS) && <Testimonials />}
+        <Faq />
+        <FinalCta ctaHref={ctaHref} />
       </main>
+      <LandingFooter />
     </div>
   )
 }

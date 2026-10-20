@@ -40,6 +40,31 @@ export function RequireBusiness() {
   return <Outlet />
 }
 
+/** Platform (Super Admin) area. UX only — every admin API checks platform permissions itself. */
+export function RequirePlatformAccess() {
+  const { user } = useAuth()
+  if (!user?.platform_permissions.length) {
+    return (
+      <div className="mx-auto max-w-lg p-8">
+        <EmptyState
+          icon={ShieldAlert}
+          title="Platform administrators only"
+          description="This area is restricted to myEcatalogues staff."
+        />
+      </div>
+    )
+  }
+  return <Outlet />
+}
+
+export function RequirePlatformPermission({ code, children }: { code: string; children: ReactNode }) {
+  const { user } = useAuth()
+  if (!user?.platform_permissions.includes(code)) {
+    return <EmptyState icon={ShieldAlert} title="You don't have access to this page" />
+  }
+  return <>{children}</>
+}
+
 export function RequirePermission({ codes, children }: { codes: string[]; children: ReactNode }) {
   const { can } = useActiveBusiness()
   if (!can(...codes)) {

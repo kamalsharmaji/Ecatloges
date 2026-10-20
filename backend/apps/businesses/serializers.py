@@ -1,6 +1,8 @@
 from django.db.models import Q
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.media_library.serializers import MediaBriefSerializer
 from apps.rbac.models import Role
 from apps.rbac.serializers import RoleSummarySerializer
 
@@ -20,7 +22,16 @@ BUSINESS_PROFILE_FIELDS = [
     "country",
     "website",
     "description",
+    "social_links",
 ]
+
+SOCIAL_NETWORKS = {
+    "facebook": ("facebook.com", "fb.com"),
+    "instagram": ("instagram.com",),
+    "youtube": ("youtube.com", "youtu.be"),
+    "linkedin": ("linkedin.com",),
+    "x": ("x.com", "twitter.com"),
+}
 
 
 class BusinessSerializer(serializers.ModelSerializer):
@@ -43,6 +54,65 @@ class BusinessSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         return value.strip().lower()
+
+    def validate_social_links(self, value):
+        """Only known networks, https links on that network's own domain (no javascript:, no lookalikes)."""
+        from urllib.parse import urlparse
+
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Send an object such as {\"instagram\": \"https://instagram.com/…\"}.")
+        cleaned = {}
+        for network, url in value.items():
+            if network not in SOCIAL_NETWORKS:
+                raise serializers.ValidationError(f"Unsupported network: {network}.")
+            url = (url or "").strip()
+            if not url:
+                continue
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower().removeprefix("www.").removeprefix("m.")
+            if parsed.scheme != "https" or not any(host == d or host.endswith(f".{d}") for d in SOCIAL_NETWORKS[network]):
+                raise serializers.ValidationError(f"Enter an https:// link on {SOCIAL_NETWORKS[network][0]} for {network}.")
+            if len(url) > 300:
+                raise serializers.ValidationError(f"The {network} link is too long.")
+            cleaned[network] = url
+        return cleaned
+
+
+class BusinessSettingsSerializer(serializers.ModelSerializer):
+    """Branding and catalogue defaults (Settings). Requires `settings.update` to change."""
+
+    logo = serializers.SerializerMethodField()
+    logo_id = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+    brand_color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", required=False,
+                                         error_messages={"invalid": "Use a hex colour like #1d4ed8."})
+
+    class Meta:
+        model = Business
+        fields = [
+            "logo", "logo_id", "brand_color", "default_show_prices", "default_enquiries_enabled",
+            "default_whatsapp_number", "enquiry_email_enabled",
+        ]
+
+    @extend_schema_field(MediaBriefSerializer(allow_null=True))
+    def get_logo(self, obj):
+        return MediaBriefSerializer(obj.logo).data if obj.logo_id else None
+
+    def validate_logo_id(self, value):
+        from apps.media_library.models import MediaAsset
+
+        if value is None:
+            return None
+        asset = MediaAsset.objects.filter(pk=value, business=self.instance, kind="image").first()
+        if asset is None:  # foreign or missing ids look the same
+            raise serializers.ValidationError("Select an image from your media library.")
+        return asset
+
+    def update(self, instance, validated_data):
+        if "logo_id" in validated_data:
+            instance.logo = validated_data.pop("logo_id")
+        if "brand_color" in validated_data:
+            validated_data["brand_color"] = validated_data["brand_color"].lower()
+        return super().update(instance, validated_data)
 
 
 class BusinessBriefSerializer(serializers.ModelSerializer):

@@ -2,21 +2,19 @@ import logging
 
 from django.conf import settings
 from django.core.mail import send_mail
-from django.template.loader import render_to_string
 
 logger = logging.getLogger("apps.core.emails")
 
 
-def send_templated_email(*, to: str, subject: str, template: str, context: dict) -> bool:
+def send_plain_email(*, to: str, subject: str, body: str, tag: str) -> bool:
     """
-    Render a plain-text template and send it. Failures are logged, never raised, so a mail outage
-    cannot break the user-facing request. Admin-editable templates arrive in Phase 8.
+    Send one plain-text email. Failures are logged, never raised, so a mail outage cannot break the
+    user-facing request or change application state. Content comes from apps.notifications.emails.
     """
-    body = render_to_string(template, context)
     try:
         send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [to], fail_silently=False)
     except Exception:  # noqa: BLE001
-        logger.exception("Email delivery failed", extra={"template": template})
+        logger.exception("Email delivery failed", extra={"template": tag})
         return False
-    logger.info("Email sent", extra={"template": template})
+    logger.info("Email sent", extra={"template": tag})
     return True

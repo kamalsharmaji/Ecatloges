@@ -23,7 +23,7 @@ const passwordSchema = z
   .and(newPasswordSchema)
 type PasswordValues = z.infer<typeof passwordSchema>
 
-function ProfileForm() {
+export function ProfileForm() {
   const { user, setUser } = useAuth()
   const [status, setStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const {
@@ -66,7 +66,7 @@ function ProfileForm() {
   )
 }
 
-function PasswordForm() {
+export function PasswordForm() {
   const { setTokens } = useAuth()
   const [status, setStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const {

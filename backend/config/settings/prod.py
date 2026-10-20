@@ -1,8 +1,17 @@
 """Production settings. Every secret must come from the environment."""
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F401,F403
-from .base import env
+from .base import PAYMENT_PROVIDER, env
 
 DEBUG = False
+
+# The mock gateway can never be used in production: it would grant paid access without payment.
+PAYMENT_MOCK_ENABLED = False
+if PAYMENT_PROVIDER == "mock" or env.bool("PAYMENT_MOCK_ENABLED", default=False):
+    raise ImproperlyConfigured(
+        "The mock payment provider is not allowed in production. Set PAYMENT_PROVIDER to a real provider."
+    )
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=True)

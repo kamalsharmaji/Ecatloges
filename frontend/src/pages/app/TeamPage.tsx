@@ -1,7 +1,9 @@
+import heroArt from '@/assets/reference/hero-team.webp'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Crown, MailPlus, Pencil, Search, X } from 'lucide-react'
+import { Crown, MailPlus, Pencil, Plus, UserCheck, Users, UserX, X } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { Link } from 'react-router-dom'
 import { z } from 'zod'
 import {
   useInvitations,
@@ -13,19 +15,26 @@ import {
   useTransferOwnership,
   useUpdateMember,
 } from '@/api/businesses'
+import { PageHero } from '@/components/panel/PageHero'
+import { StatCard, StatGrid } from '@/components/panel/StatCard'
+import { FilterSelect, SearchInput, Toolbar } from '@/components/panel/Toolbar'
 import { Button } from '@/components/ui/Button'
-import { Card, CardBody, CardHeader, PageHeader } from '@/components/ui/Card'
+import { chipTone, rowIconButton } from '@/components/ui/buttonStyles'
+import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import { Alert, Badge, ErrorState, Spinner } from '@/components/ui/Feedback'
 import { SelectField, TextField } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { Pagination } from '@/components/ui/Pagination'
 import { useActiveBusiness } from '@/features/business/BusinessContext'
+import { Avatar } from '@/features/leads/LeadBits'
 import { assignableRoles } from '@/features/team/roleOptions'
 import { RequirePermission } from '@/routes/guards'
 import type { Membership } from '@/types/api'
+import { cn } from '@/utils/cn'
+import { dayMonthYear } from '@/utils/dates'
 import { applyApiErrors, errorMessage } from '@/utils/formErrors'
 
-const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+const dateFmt = { format: dayMonthYear }
 
 // --- Invite --------------------------------------------------------------------------------
 const inviteSchema = z.object({
@@ -217,30 +226,22 @@ function MembersCard({ onEdit }: { onEdit: (m: Membership) => void }) {
   const { businessId, context, can } = useActiveBusiness()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const members = useMembers(businessId, { page, search: search || undefined })
+  const [status, setStatus] = useState('')
+  const [role, setRole] = useState('')
+  const roles = useRoles(businessId)
+  const members = useMembers(businessId, { page, search: search || undefined, status: status || undefined, role: role || undefined })
   const canManage = can('member.manage')
 
   return (
+    <>
+      <Toolbar>
+        <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1) }} placeholder="Search by name or email…" />
+        <FilterSelect label="Role" value={role} onChange={(v) => { setRole(v); setPage(1) }}
+          options={[{ value: '', label: 'All Roles' }, ...(roles.data ?? []).map((r) => ({ value: r.id, label: r.name }))]} />
+        <FilterSelect label="Status" value={status} onChange={(v) => { setStatus(v); setPage(1) }}
+          options={[{ value: '', label: 'All Status' }, { value: 'active', label: 'Active' }, { value: 'suspended', label: 'Suspended' }]} />
+      </Toolbar>
     <Card>
-      <CardHeader
-        title="Members"
-        action={
-          <label className="relative block w-full sm:w-64">
-            <span className="sr-only">Search members</span>
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" aria-hidden />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
-              placeholder="Search name or email"
-              className="h-9 w-full rounded-lg border border-border bg-white pr-3 pl-9 text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 focus:outline-none"
-            />
-          </label>
-        }
-      />
       <CardBody className="p-0">
         {members.isPending ? (
           <Spinner />
@@ -253,42 +254,53 @@ function MembersCard({ onEdit }: { onEdit: (m: Membership) => void }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-canvas text-xs font-medium tracking-wide text-muted uppercase">
+              <thead className="bg-thead text-[13px] font-semibold text-ink">
                 <tr>
-                  <th scope="col" className="px-5 py-3">Member</th>
-                  <th scope="col" className="px-5 py-3">Role</th>
-                  <th scope="col" className="px-5 py-3">Status</th>
-                  <th scope="col" className="hidden px-5 py-3 md:table-cell">Joined</th>
-                  <th scope="col" className="px-5 py-3"><span className="sr-only">Actions</span></th>
+                  <th scope="col" className="w-12 px-5 py-3">#</th>
+                  <th scope="col" className="px-3 py-3">Name</th>
+                  <th scope="col" className="px-3 py-3">Role</th>
+                  <th scope="col" className="hidden px-3 py-3 lg:table-cell">Email / Contact</th>
+                  <th scope="col" className="px-3 py-3">Status</th>
+                  <th scope="col" className="hidden px-3 py-3 md:table-cell">Joined Date</th>
+                  <th scope="col" className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {members.data.results.map((m) => {
+                {members.data.results.map((m, i) => {
                   const isMe = m.id === context?.membership_id
                   const editable = canManage && !isMe && (!m.is_owner || context?.is_owner)
                   return (
                     <tr key={m.id}>
-                      <td className="px-5 py-3">
-                        <p className="font-medium">
-                          {m.user.full_name} {isMe && <span className="text-xs text-muted">(you)</span>}
-                        </p>
-                        <p className="text-xs text-muted">{m.user.email}</p>
+                      <td className="px-5 py-3 text-ink">{(members.data.page - 1) * members.data.page_size + i + 1}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={m.user.full_name || m.user.email} />
+                          <p className="font-semibold text-ink">
+                            {m.user.full_name} {isMe && <span className="text-xs font-normal text-body">(you)</span>}
+                          </p>
+                        </div>
                       </td>
-                      <td className="px-5 py-3">
-                        <Badge tone={m.is_owner ? 'brand' : 'neutral'}>{m.role.name}</Badge>
+                      <td className="px-3 py-3">
+                        <span className={cn('rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap', m.is_owner ? 'bg-[#ffe1e8] text-[#e11d48]' : chipTone(m.role.name))}>{m.role.name}</span>
                       </td>
-                      <td className="px-5 py-3">
-                        <Badge tone={m.status === 'active' ? 'success' : 'warning'}>
+                      <td className="hidden px-3 py-3 text-[13px] text-ink lg:table-cell">
+                        {m.user.email}
+                        {m.user.phone && <span className="block">{m.user.phone}</span>}
+                      </td>
+                      <td className="px-3 py-3">
+                        <Badge tone={m.status === 'active' ? 'success' : 'danger'}>
                           {m.status === 'active' ? 'Active' : 'Suspended'}
                         </Badge>
                       </td>
-                      <td className="hidden px-5 py-3 text-muted md:table-cell">{dateFmt.format(new Date(m.created_at))}</td>
-                      <td className="px-5 py-3 text-right">
-                        {editable && (
-                          <Button variant="ghost" size="sm" icon={<Pencil className="size-4" />} onClick={() => onEdit(m)}>
-                            Manage
-                          </Button>
-                        )}
+                      <td className="hidden px-3 py-3 text-[13px] text-ink md:table-cell">{dateFmt.format(new Date(m.created_at))}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end">
+                          {editable && (
+                            <button type="button" className={rowIconButton} aria-label={`Manage ${m.user.full_name}`} title="Manage" onClick={() => onEdit(m)}>
+                              <Pencil className="size-4" fill="currentColor" fillOpacity={0.2} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -297,13 +309,12 @@ function MembersCard({ onEdit }: { onEdit: (m: Membership) => void }) {
             </table>
           </div>
         )}
-        {members.data && (
-          <div className="px-5 pb-4">
-            <Pagination page={page} totalPages={members.data.total_pages} count={members.data.count} onPage={setPage} />
-          </div>
-        )}
       </CardBody>
     </Card>
+      {members.data && (
+        <Pagination page={page} totalPages={members.data.total_pages} count={members.data.count} pageSize={members.data.page_size} noun="members" onPage={setPage} />
+      )}
+    </>
   )
 }
 
@@ -360,6 +371,23 @@ function InvitationsCard() {
   )
 }
 
+/** Real counts from the members / invitations endpoints (page_size=1 reads only the totals). */
+function TeamStats() {
+  const { businessId } = useActiveBusiness()
+  const total = useMembers(businessId, { page_size: 1 })
+  const active = useMembers(businessId, { page_size: 1, status: 'active' })
+  const suspended = useMembers(businessId, { page_size: 1, status: 'suspended' })
+  const invitations = useInvitations(businessId)
+  return (
+    <StatGrid>
+      <StatCard icon={Users} label="Total Members" value={total.data?.count ?? '—'} loading={total.isPending} />
+      <StatCard icon={UserCheck} tone="pink" label="Active Members" value={active.data?.count ?? '—'} loading={active.isPending} />
+      <StatCard icon={MailPlus} tone="amber" label="Pending Invitations" value={invitations.data?.count ?? '—'} loading={invitations.isPending} />
+      <StatCard icon={UserX} tone="violet" label="Suspended Members" value={suspended.data?.count ?? '—'} loading={suspended.isPending} />
+    </StatGrid>
+  )
+}
+
 export function TeamPage() {
   const { can } = useActiveBusiness()
   const [inviting, setInviting] = useState(false)
@@ -367,18 +395,27 @@ export function TeamPage() {
 
   return (
     <RequirePermission codes={['member.view']}>
-      <PageHeader
-        title="Team"
-        description="Invite staff and control what each person can do in this business."
+      <PageHero
+        icon={Users}
+        title="Team Members"
+        description="Manage your team members, roles and permissions. Add staff, assign roles and control access to catalogues, products and settings."
+        illustration={heroArt}
+        highlights={['Add and manage team members', 'Assign roles and permissions', 'Control access by module', 'Track activity in the log']}
         action={
           can('member.invite') && (
-            <Button icon={<MailPlus className="size-4" />} onClick={() => setInviting(true)}>
-              Invite member
+            <Button size="lg" icon={<Plus className="size-5" />} onClick={() => setInviting(true)}>
+              Add Team Member
             </Button>
           )
         }
       />
-      <div className="space-y-6">
+      <TeamStats />
+      <div className="space-y-4">
+        {can('role.view') && (
+          <p className="text-right text-sm">
+            <Link to="/app/roles" className="font-medium text-brand-700 hover:underline">Roles & permissions →</Link>
+          </p>
+        )}
         <MembersCard onEdit={setEditing} />
         <InvitationsCard />
       </div>

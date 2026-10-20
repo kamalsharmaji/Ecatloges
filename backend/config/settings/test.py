@@ -21,8 +21,16 @@ DATABASES = {  # noqa: F405
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 MEDIA_ROOT = tempfile.mkdtemp(prefix="myecatalogues-test-media-")
+TESTING = True
+PAYMENT_MOCK_ENABLED = True
 PAYMENT_PROVIDER = "mock"
 PAYMENT_WEBHOOK_SECRET = "test-webhook-secret"  # noqa: S105
+RAZORPAY_KEY_ID = ""
+RAZORPAY_KEY_SECRET = ""
+BILLING_TAX_RATE = "0"
+BILLING_TAX_NAME = ""
+BILLING_PRICES_INCLUDE_TAX = False
+SUBSCRIPTION_GRACE_DAYS = 0
 LOGGING["root"]["level"] = "WARNING"  # noqa: F405
 
 # Throttling is exercised by dedicated tests; keep generous defaults otherwise.

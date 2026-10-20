@@ -7,7 +7,7 @@ from rest_framework import exceptions
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.core.emails import send_templated_email
+from apps.notifications.emails import send_email
 
 from .models import User
 from .tokens import (
@@ -42,10 +42,9 @@ def register_user(*, email: str, password: str, full_name: str, phone: str = "")
 
 def send_verification_email(user) -> None:
     token = make_email_verification_token(user)
-    send_templated_email(
+    send_email(
+        "account.verify_email",
         to=user.email,
-        subject="Verify your myEcatalogues email address",
-        template="emails/verify_email.txt",
         context={
             "full_name": user.full_name,
             "verify_url": f"{settings.FRONTEND_URL}/verify-email?token={token}",
@@ -79,10 +78,9 @@ def request_password_reset(email: str) -> None:
         logger.info("Password reset requested for unknown email")
         return
     token = password_reset_token.make_token(user)
-    send_templated_email(
+    send_email(
+        "account.password_reset",
         to=user.email,
-        subject="Reset your myEcatalogues password",
-        template="emails/password_reset.txt",
         context={
             "full_name": user.full_name,
             "reset_url": f"{settings.FRONTEND_URL}/reset-password?uid={encode_uid(user)}&token={token}",
@@ -106,6 +104,7 @@ def reset_password(*, uid: str, token: str, new_password: str) -> User:
     user.set_password(new_password)
     user.save(update_fields=["password", "updated_at"])
     revoke_all_refresh_tokens(user)
+    _security_event(user, "auth.password_reset")
     logger.info("Password reset completed", extra={"user_id": str(user.id)})
     return user
 
@@ -115,4 +114,13 @@ def change_password(user, *, new_password: str) -> dict:
     user.set_password(new_password)
     user.save(update_fields=["password", "updated_at"])
     revoke_all_refresh_tokens(user)
+    _security_event(user, "auth.password_changed")
     return issue_tokens(user)
+
+
+def _security_event(user, action: str) -> None:
+    from apps.audit_logs import services as audit
+    from apps.audit_logs.models import AuditScope
+
+    # The new password never reaches the audit trail — only the fact that it changed.
+    audit.record(action, actor=user, scope=AuditScope.ACCOUNT, target=user, target_label=user.full_name or user.email)

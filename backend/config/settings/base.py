@@ -43,6 +43,16 @@ LOCAL_APPS = [
     "apps.accounts",
     "apps.rbac",
     "apps.businesses",
+    "apps.billing",
+    "apps.media_library",
+    "apps.products",
+    "apps.catalogues",
+    "apps.enquiries",
+    "apps.analytics",
+    "apps.audit_logs",
+    "apps.notifications",
+    "apps.support",
+    "apps.platform_admin",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -141,6 +151,12 @@ STORAGES = {
 # Uploads larger than this are streamed to a temp file instead of held in memory,
 # so large videos never get loaded fully into backend memory.
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+# Technical safety caps (independent of plan limits, which are usually stricter).
+MEDIA_MAX_UPLOAD_MB = env.int("MEDIA_MAX_UPLOAD_MB", default=100)
+MEDIA_MAX_ITEMS_PER_PRODUCT = env.int("MEDIA_MAX_ITEMS_PER_PRODUCT", default=20)
+MEDIA_MAX_IMAGE_PIXELS = env.int("MEDIA_MAX_IMAGE_PIXELS", default=60_000_000)  # decompression-bomb guard
+MEDIA_THUMBNAIL_SIZE = 480
+MEDIA_PREVIEW_SIZE = 1600
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 FILE_UPLOAD_PERMISSIONS = 0o644
 
@@ -201,6 +217,30 @@ SPECTACULAR_SETTINGS = {
         # Business.Status and BusinessMembership.Status share the same choices (active/suspended).
         "ActiveStatusEnum": "apps.businesses.models.Business.Status",
         "InvitationStatusEnum": "apps.businesses.models.StaffInvitation.Status",
+        "SubscriptionStatusEnum": "apps.billing.models.Subscription.Status",
+        "BillingIntervalEnum": "apps.billing.models.BillingInterval",
+        "PaymentKindEnum": "apps.billing.models.Payment.Kind",
+        # Product and Catalogue statuses share the same choices (draft/published/archived).
+        "ContentStatusEnum": "apps.products.models.ProductStatus",
+        "CategoryStatusEnum": "apps.products.models.CategoryStatus",
+        "StockStatusEnum": "apps.products.models.StockStatus",
+        "MediaKindEnum": "apps.media_library.models.MediaKind",
+        "MediaFolderEnum": "apps.media_library.models.MediaFolder",
+        "EnquiryStatusEnum": "apps.enquiries.models.EnquiryStatus",
+        "EnquirySourceEnum": "apps.enquiries.models.EnquirySource",
+        "TrafficSourceEnum": "apps.analytics.models.TrafficSource",
+        "BusinessCategoryEnum": "apps.businesses.models.BusinessCategory",
+        "TicketStatusEnum": "apps.support.models.TicketStatus",
+        "TicketCategoryEnum": "apps.support.models.TicketCategory",
+        "TicketPriorityEnum": "apps.support.models.TicketPriority",
+        "NotificationCategoryEnum": "apps.notifications.models.NotificationCategory",
+        "NotificationLevelEnum": "apps.notifications.models.NotificationLevel",
+        "AuditScopeEnum": "apps.audit_logs.models.AuditScope",
+        "AnnouncementAudienceEnum": "apps.notifications.models.AnnouncementAudience",
+        "AnnouncementStatusEnum": "apps.notifications.models.AnnouncementStatus",
+        "ActorTypeEnum": "apps.audit_logs.models.ActorType",
+        "PaymentStatusEnum": "apps.billing.models.Payment.Status",
+        "InvoiceStatusEnum": "apps.billing.models.Invoice.Status",
     },
 }
 
@@ -231,9 +271,35 @@ PUBLIC_CATALOGUE_BASE_URL = env(
     "PUBLIC_CATALOGUE_BASE_URL", default=f"{FRONTEND_URL}/c"
 ).rstrip("/")
 
-# Payment provider: "mock" for local development/tests. Real providers plug in later.
-PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="mock")
+# ---------------------------------------------------------------------------
+# Billing & payments (see docs/SETUP.md "Payments")
+# ---------------------------------------------------------------------------
+# Provider used for new checkouts: "" (none configured → checkout returns 503), "razorpay",
+# or "mock" (development/tests only — only available when PAYMENT_MOCK_ENABLED is true).
+PAYMENT_PROVIDER = env("PAYMENT_PROVIDER", default="")
+PAYMENT_MOCK_ENABLED = False  # enabled only by dev.py / test.py; prod.py refuses it
 PAYMENT_WEBHOOK_SECRET = env("PAYMENT_WEBHOOK_SECRET", default="")
+RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default="")
+RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default="")
+
+BILLING_CURRENCIES = env.list("BILLING_CURRENCIES", default=["INR"])
+# Tax is OFF until rates are approved by accounting. Rate is a percentage, e.g. "18.00".
+BILLING_TAX_RATE = env("BILLING_TAX_RATE", default="0")
+BILLING_TAX_NAME = env("BILLING_TAX_NAME", default="")
+BILLING_PRICES_INCLUDE_TAX = env.bool("BILLING_PRICES_INCLUDE_TAX", default=False)
+# Seller details printed on invoices.
+BILLING_SELLER_NAME = env("BILLING_SELLER_NAME", default="myEcatalogues")
+BILLING_SELLER_ADDRESS = env("BILLING_SELLER_ADDRESS", default="")
+BILLING_SELLER_EMAIL = env("BILLING_SELLER_EMAIL", default="")
+BILLING_SELLER_TAX_ID = env("BILLING_SELLER_TAX_ID", default="")
+BILLING_INVOICE_PREFIX = env("BILLING_INVOICE_PREFIX", default="INV")
+
+# Lifecycle tuning. Grace defaults to 0 days (no grace) until a policy is approved.
+CHECKOUT_EXPIRY_MINUTES = env.int("CHECKOUT_EXPIRY_MINUTES", default=60)
+SUBSCRIPTION_GRACE_DAYS = env.int("SUBSCRIPTION_GRACE_DAYS", default=0)
+# In-app "plan ends soon" reminder window used by `manage.py sync_subscriptions` (operational, not commercial).
+SUBSCRIPTION_REMINDER_DAYS = env.int("SUBSCRIPTION_REMINDER_DAYS", default=7)
+RENEWAL_WINDOW_DAYS = env.int("RENEWAL_WINDOW_DAYS", default=30)
 
 # ---------------------------------------------------------------------------
 # Logging (structured JSON lines to stdout)

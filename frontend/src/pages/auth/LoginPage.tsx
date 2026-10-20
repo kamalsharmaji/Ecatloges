@@ -1,4 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { ArrowRight, Lock, Mail } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -41,40 +42,28 @@ export function LoginPage() {
 
   return (
     <>
-      <AuthHeading
-        title="Sign in to myEcatalogues"
-        subtitle={
-          <>
-            New here?{' '}
-            <Link to="/register" className="font-medium text-brand-700 hover:underline">
-              Create an account
-            </Link>
-          </>
-        }
-      />
-      <form onSubmit={onSubmit} noValidate className="space-y-5">
+      <AuthHeading title="Login to your account" subtitle="Enter your credentials to access your dashboard" />
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
         {sessionExpired && !formError && (
           <Alert tone="warning">Your session has expired. Please sign in again.</Alert>
         )}
         {formError && <Alert tone="error">{formError}</Alert>}
-        <TextField label="Email" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
-        <div className="space-y-1.5">
-          <TextField
-            label="Password"
-            type="password"
-            autoComplete="current-password"
-            error={errors.password?.message}
-            {...register('password')}
-          />
-          <div className="text-right">
-            <Link to="/forgot-password" className="text-sm font-medium text-brand-700 hover:underline">
-              Forgot password?
-            </Link>
-          </div>
+        <TextField label="Email" hideLabel icon={Mail} placeholder="Enter your email address" type="email" autoComplete="email"
+          className="h-12" error={errors.email?.message} {...register('email')} />
+        <TextField label="Password" hideLabel icon={Lock} placeholder="Enter your password" type="password" autoComplete="current-password"
+          className="h-12" error={errors.password?.message} {...register('password')} />
+        <div className="text-right">
+          <Link to="/forgot-password" className="text-sm font-medium text-brand-700 underline underline-offset-2">
+            Forgot Password?
+          </Link>
         </div>
-        <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>
-          Sign in
+        <Button type="submit" size="lg" className="h-[52px] w-full text-[17px]" loading={isSubmitting}>
+          Log In <ArrowRight className="size-5" aria-hidden />
         </Button>
+        <p className="pt-3 text-center text-[14px] text-ink">
+          New to myEcatalogues?{' '}
+          <Link to="/register" className="font-medium text-brand-700 underline underline-offset-2">Create an Account</Link>
+        </p>
       </form>
     </>
   )

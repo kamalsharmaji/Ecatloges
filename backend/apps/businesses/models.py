@@ -45,8 +45,21 @@ class Business(UUIDModel):
     country = models.CharField(max_length=2, default="IN", help_text="ISO 3166-1 alpha-2 code.")
     website = models.URLField(blank=True)
     description = models.TextField(blank=True, max_length=2000)
+    # {"facebook": url, "instagram": url, ...} — allowlisted keys, validated in the serializer.
+    social_links = models.JSONField(default=dict, blank=True)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    # Branding & catalogue defaults (Settings). New catalogues start from these values.
+    logo = models.ForeignKey(
+        "media_library.MediaAsset", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    brand_color = models.CharField(max_length=7, default="#1d4ed8")
+    default_show_prices = models.BooleanField(default=True)
+    default_enquiries_enabled = models.BooleanField(default=True)
+    default_whatsapp_number = models.CharField(max_length=20, blank=True, validators=[phone_validator])
+    # Email each new enquiry to the business email address (the Phase 6 behaviour, now switchable).
+    enquiry_email_enabled = models.BooleanField(default=True)
+
+    status =models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="created_businesses"
     )

@@ -7,7 +7,7 @@ import { useAuth } from '@/features/auth/AuthContext'
 import { ActiveBusinessContext, type ActiveBusinessValue } from '@/features/business/BusinessContext'
 
 /** Query keys whose data belongs to one business and must be dropped when switching. */
-const SCOPED_KEYS = ['business-context', 'members', 'invitations', 'roles']
+const SCOPED_KEYS = ['business-context', 'members', 'invitations', 'roles', 'billing', 'catalogues', 'products', 'categories', 'media', 'enquiries', 'customers', 'analytics', 'activity', 'support', 'business-settings']
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const { status } = useAuth()

@@ -42,8 +42,12 @@ npm run dev                            # http://localhost:5173
 | 1 | Repository and environment setup | ✅ done |
 | 2 | Django configuration, custom user model, migrations | ✅ done |
 | 3 | Auth, businesses, memberships, tenant isolation, RBAC (+ auth/onboarding/team/roles UI) | ✅ done |
-| 4 | Subscription plans and payment abstraction | ⏳ next |
-| 5–15 | Catalogues, media, enquiries, panels, hardening, deployment | planned |
+| 4 | Subscription plans, billing, payment abstraction, invoices (+ billing & Super Admin UI) | ✅ done (mock gateway; real gateway pending) |
+| 5 | Catalogues, categories, products, media library, public catalogue (+ UI from the PDF designs) | ✅ done (see docs/ui-implementation-checklist.md) |
+| 6–7 | Enquiries, customers, QR codes, analytics; remaining media work | ⏳ next |
+| 8–15 | Notifications, support, audit logs, panels, hardening, deployment | planned |
+
+UI screens are tracked against the design PDF in [docs/ui-implementation-checklist.md](docs/ui-implementation-checklist.md).
 
 ## Known limitations (current)
 
@@ -51,5 +55,9 @@ npm run dev                            # http://localhost:5173
   runs. The Phase 3 suite was also run against PostgreSQL 17.6 (portable binaries, docs/SETUP.md option C).
 - The terms-and-conditions page is a placeholder until legal text is provided.
 - Changing a user's email address is not supported yet (requires re-verification flow).
-- Audit-log records for membership/role changes arrive with the `audit_logs` app (Phase 8);
-  until then those actions are written to the structured application log.
+- Audit-log records for membership/role/billing admin actions arrive with the `audit_logs` app
+  (Phase 8); until then those actions are written to the structured application log.
+- **Real payments are not enabled.** Only the mock gateway (dev/tests) works end to end. The
+  Razorpay adapter is prepared but unverified; plans in the database are `[DEV]` placeholders;
+  tax is off. See docs/SETUP.md §5 for the external setup required.
+- No proration on upgrades and no automatic refunds; flagged payments are resolved manually.

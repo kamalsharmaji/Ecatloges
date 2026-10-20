@@ -1,11 +1,34 @@
-import { ArrowLeftRight, LayoutDashboard, Menu, ShieldCheck, Store, UserRound, Users, X, type LucideIcon } from 'lucide-react'
-import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import {
+  BarChart3,
+  BookOpen,
+  Box,
+  CalendarDays,
+  Contact,
+  Folder,
+  Images,
+  LayoutDashboard,
+  MessagesSquare,
+  QrCode,
+  Receipt,
+  Settings,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
+import { Link, Outlet, useLocation } from 'react-router-dom'
+import { useBillingOverview, usePlans } from '@/api/billing'
+import { useEnquirySummary } from '@/api/leads'
+import { buttonClasses } from '@/components/ui/buttonStyles'
+import { Alert } from '@/components/ui/Feedback'
 import { Logo } from '@/components/Logo'
+import { AnnouncementBanner } from '@/components/AnnouncementBanner'
+import { NotificationBell } from '@/components/NotificationBell'
+import { GlobalSearch, type SearchSource } from '@/components/panel/GlobalSearch'
+import { HelpLink, MobileTabBar, ShellFrame, ShellHeader, SideNav, SidebarCard, SidebarLogo } from '@/components/panel/Shell'
+import { useShellToggle } from '@/components/panel/useShellToggle'
 import { UserMenu } from '@/components/UserMenu'
 import { VerifyEmailBanner } from '@/components/VerifyEmailBanner'
 import { useActiveBusiness } from '@/features/business/BusinessContext'
-import { cn } from '@/utils/cn'
+import type { Plan } from '@/types/billing'
 
 interface NavItem {
   to: string
@@ -16,105 +39,165 @@ interface NavItem {
   end?: boolean
 }
 
-// Catalogue, product, enquiry and other modules are added to this list as their phases land.
+// Exactly the 13 items of the reference sidebar, in its order. Notifications, Activity Log, Roles and
+// Help & Support stay reachable from the header bell, the help (?) icon, Team and Settings.
 const NAV: NavItem[] = [
   { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/app/business', label: 'Business profile', icon: Store, requires: ['business.view'] },
-  { to: '/app/team', label: 'Team', icon: Users, requires: ['member.view'] },
-  { to: '/app/roles', label: 'Roles & permissions', icon: ShieldCheck, requires: ['role.view'] },
-  { to: '/app/account', label: 'My account', icon: UserRound },
+  { to: '/app/catalogues', label: 'Catalogues', icon: BookOpen, requires: ['catalogue.view'] },
+  { to: '/app/products', label: 'Products', icon: Box, requires: ['product.view'] },
+  { to: '/app/categories', label: 'Categories', icon: Folder, requires: ['category.view'] },
+  { to: '/app/media', label: 'Media Library', icon: Images, requires: ['media.view'] },
+  { to: '/app/enquiries', label: 'Enquiries', icon: MessagesSquare, requires: ['enquiry.view'] },
+  { to: '/app/analytics', label: 'Analytics', icon: BarChart3, requires: ['analytics.view'] },
+  { to: '/app/qr-codes', label: 'QR Codes', icon: QrCode, requires: ['qrcode.view'] },
+  { to: '/app/customers', label: 'Customers', icon: Contact, requires: ['customer.view'] },
+  { to: '/app/team', label: 'Team Members', icon: Users, requires: ['member.view'] },
+  { to: '/app/billing', label: 'Subscription', icon: CalendarDays, requires: ['subscription.view'], end: true },
+  { to: '/app/billing/invoices', label: 'Invoices', icon: Receipt, requires: ['invoice.view'] },
+  { to: '/app/settings', label: 'Settings', icon: Settings },
 ]
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { context, can } = useActiveBusiness()
+/** Nudges the team towards a plan; paid features are blocked server-side regardless. */
+function SubscriptionBanner() {
+  const { businessId, can } = useActiveBusiness()
+  const overview = useBillingOverview(businessId, can('subscription.view'))
+  const { pathname } = useLocation()
+  if (!overview.data || overview.data.has_paid_access || pathname.startsWith('/app/billing')) return null
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-16 items-center px-5">
-        <Link to="/app" onClick={onNavigate}>
-          <Logo />
-        </Link>
-      </div>
-      <div className="mx-3 mb-4 rounded-lg border border-border bg-canvas px-3 py-2.5">
-        <p className="text-xs text-muted">Business</p>
-        <p className="truncate text-sm font-semibold">{context?.business.name}</p>
-        <p className="text-xs text-brand-700">{context?.role.name}</p>
-      </div>
-      <nav aria-label="Main" className="flex-1 space-y-0.5 px-3">
-        {NAV.filter((item) => !item.requires || can(...item.requires)).map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-600 hover:bg-canvas hover:text-ink',
-              )
-            }
-          >
-            <Icon className="size-4.5" aria-hidden />
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="border-t border-border p-3">
-        <Link
-          to="/businesses"
-          onClick={onNavigate}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-canvas"
-        >
-          <ArrowLeftRight className="size-4.5" aria-hidden /> Switch business
-        </Link>
-      </div>
+    <Alert
+      tone="info"
+      title="No active plan"
+      action={
+        can('subscription.manage') && (
+          <Link to="/app/billing/plans" className={buttonClasses('primary', 'sm')}>
+            Choose a plan
+          </Link>
+        )
+      }
+    >
+      {can('subscription.manage')
+        ? 'Choose a plan to unlock catalogues, products and team invitations.'
+        : 'Ask the business owner to choose a plan to unlock paid features.'}
+    </Alert>
+  )
+}
+
+/** What the next plan adds over the current one, in the reference's wording (only true statements). */
+function upgradePoints(current: Plan | null, next: Plan) {
+  // `null` means unlimited, so an unlimited next plan is "more" than any finite current limit.
+  const more = (a: number | null, b: number | null) => (b === null ? a !== null : a !== null && b > a)
+  const points: string[] = []
+  if (!current || more(current.max_catalogues, next.max_catalogues)) points.push('More catalogues')
+  if (!current || more(current.max_products, next.max_products)) points.push('More products')
+  if (!current || more(current.max_staff, next.max_staff)) points.push('Team members')
+  if (!current || more(current.storage_limit_mb, next.storage_limit_mb)) points.push('More storage')
+  if (next.analytics_enabled && !current?.analytics_enabled) points.push('Advanced analytics')
+  return points.slice(0, 4)
+}
+
+/** Sidebar plan card: next plan up from the live subscription and the live plan list. */
+function PlanCard({ onNavigate }: { onNavigate?: () => void }) {
+  const { businessId, can } = useActiveBusiness()
+  const overview = useBillingOverview(businessId, can('subscription.view'))
+  const sub = overview.data?.subscription ?? null
+  const plans = usePlans(sub?.plan_interval)
+  if (!can('subscription.view') || !overview.data || !plans.data) return null
+  const currentPlan = plans.data.find((p) => p.id === sub?.plan.id) ?? null
+  const rank = currentPlan?.tier_rank ?? -1
+  const next = plans.data.filter((p) => p.tier_rank > rank).sort((a, b) => a.tier_rank - b.tier_rank)[0]
+  const manage = can('subscription.manage')
+  if (!next) {
+    if (!sub) return null
+    return (
+      <SidebarCard
+        title={sub.plan_name}
+        text="You're on the highest plan."
+        action={{ label: 'View Plan', to: '/app/billing', onNavigate }}
+      />
+    )
+  }
+  return (
+    <SidebarCard
+      title={`Upgrade to ${next.name}`}
+      points={upgradePoints(currentPlan, next)}
+      action={manage ? { label: 'Upgrade Now', to: '/app/billing/plans', onNavigate } : undefined}
+    />
+  )
+}
+
+function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+  const { businessId, can } = useActiveBusiness()
+  const enquiries = useEnquirySummary(businessId, can('enquiry.view'))
+  const items = NAV.filter((item) => !item.requires || can(...item.requires)).map((item) => ({
+    ...item,
+    badge: item.to === '/app/enquiries' ? enquiries.data?.new : undefined,
+  }))
+  return (
+    <div className="flex min-h-full flex-col">
+      <SidebarLogo to="/app" onNavigate={onNavigate}>
+        <Logo />
+      </SidebarLogo>
+      <SideNav items={items} label="Main" onNavigate={onNavigate} />
+      <div className="min-h-6 flex-1" />
+      <PlanCard onNavigate={onNavigate} />
     </div>
   )
 }
 
+const SEARCH_SOURCES: (SearchSource & { requires: string })[] = [
+  {
+    key: 'catalogues', label: 'Catalogues', endpoint: '/catalogues/', requires: 'catalogue.view',
+    toItem: (r) => ({ title: String(r.name), subtitle: String(r.tagline || ''), href: `/app/catalogues/${r.id}` }),
+  },
+  {
+    key: 'products', label: 'Products', endpoint: '/products/', requires: 'product.view',
+    toItem: (r) => ({ title: String(r.name), subtitle: r.sku ? `SKU: ${r.sku}` : undefined, href: `/app/products/${r.id}` }),
+  },
+  {
+    key: 'enquiries', label: 'Enquiries', endpoint: '/enquiries/', requires: 'enquiry.view',
+    toItem: (r) => ({ title: String(r.name), subtitle: String(r.product_name || r.catalogue_name || ''), href: `/app/enquiries?enquiry=${r.id}` }),
+  },
+]
+
 export function AppLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const { businessId, context, can } = useActiveBusiness()
+  const shell = useShellToggle()
   return (
-    <div className="min-h-screen lg:pl-64">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-border bg-white lg:block">
-        <Sidebar />
-      </aside>
-
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-white shadow-xl">
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-3 rounded p-1.5 text-muted hover:bg-canvas"
-              aria-label="Close navigation"
-            >
-              <X className="size-5" />
-            </button>
-            <Sidebar onNavigate={() => setMobileOpen(false)} />
-          </aside>
-        </div>
-      )}
-
-      <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-white/90 px-4 backdrop-blur sm:px-6">
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          className="rounded-lg p-2 text-muted hover:bg-canvas lg:hidden"
-          aria-label="Open navigation"
+    <ShellFrame
+      sidebar={(onNavigate) => <Sidebar onNavigate={onNavigate} />}
+      mobileOpen={shell.mobileOpen}
+      onCloseMobile={shell.closeMobile}
+      collapsed={shell.collapsed}
+      tabBar={
+        <MobileTabBar
+          onMore={shell.toggle}
+          items={NAV.filter((n) => ['/app', '/app/catalogues', '/app/products', '/app/enquiries'].includes(n.to) && (!n.requires || can(...n.requires)))}
+        />
+      }
+      header={
+        <ShellHeader
+          onMenu={shell.toggle}
+          brand={<Link to="/app" aria-label="Dashboard"><Logo /></Link>}
+          search={
+            <GlobalSearch
+              scope={businessId}
+              placeholder="Search products, catalogues, enquiries..."
+              sources={SEARCH_SOURCES.filter((s) => can(s.requires))}
+            />
+          }
         >
-          <Menu className="size-5" />
-        </button>
-        <div className="flex-1" />
-        <UserMenu accountPath="/app/account" />
-      </header>
-
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
-        <VerifyEmailBanner />
-        <div>
-          <Outlet />
-        </div>
-      </main>
-    </div>
+          <NotificationBell context={businessId} viewAllHref="/app/notifications" />
+          <HelpLink to="/app/support" />
+          <UserMenu accountPath="/app/account" subtitle={context?.role.name} switchBusiness />
+        </ShellHeader>
+      }
+    >
+      <VerifyEmailBanner />
+      <SubscriptionBanner />
+      <AnnouncementBanner />
+      <div>
+        <Outlet />
+      </div>
+    </ShellFrame>
   )
 }
